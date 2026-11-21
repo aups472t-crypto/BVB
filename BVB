@@ -1,0 +1,279 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local mouse = player:GetMouse()
+
+local eventFolder = ReplicatedStorage:WaitForChild("EventSystem")
+local adminAction = eventFolder:WaitForChild("AdminAction")
+local broadcastEvent = eventFolder:WaitForChild("BroadcastEvent")
+
+local autoHealState = false
+local isPlayingCutscene = false
+
+-- สร้าง ScreenGui และแบนเนอร์ประกาศกลางจอ
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "EventControllerGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+local bannerLabel = Instance.new("TextLabel")
+bannerLabel.Name = "AnnouncementBanner"
+bannerLabel.Size = UDim2.new(0.8, 0, 0.14, 0)
+bannerLabel.Position = UDim2.new(0.1, 0, 0.16, 0)
+bannerLabel.BackgroundTransparency = 1
+bannerLabel.Text = ""
+bannerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+bannerLabel.TextStrokeTransparency = 0.15
+bannerLabel.TextStrokeColor3 = Color3.fromRGB(20, 20, 25)
+bannerLabel.Font = Enum.Font.GothamBlack
+bannerLabel.TextScaled = true
+bannerLabel.Visible = false
+bannerLabel.Parent = screenGui
+
+local function showBanner(text: string, color: Color3?)
+	bannerLabel.Text = text
+	bannerLabel.TextColor3 = color or Color3.fromRGB(255, 255, 255)
+	bannerLabel.Position = UDim2.new(0.1, 0, 0.12, 0)
+	bannerLabel.TextTransparency = 1
+	bannerLabel.TextStrokeTransparency = 1
+	bannerLabel.Visible = true
+
+	local fadeIn = TweenService:Create(bannerLabel, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Position = UDim2.new(0.1, 0, 0.18, 0),
+		TextTransparency = 0,
+		TextStrokeTransparency = 0.15,
+	})
+	fadeIn:Play()
+
+	task.delay(3.2, function()
+		if bannerLabel.Text == text then
+			local fadeOut = TweenService:Create(bannerLabel, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.new(0.1, 0, 0.13, 0),
+				TextTransparency = 1,
+				TextStrokeTransparency = 1,
+			})
+			fadeOut:Play()
+			fadeOut.Completed:Once(function()
+				if bannerLabel.Text == text then
+					bannerLabel.Visible = false
+				end
+			end)
+		end
+	end)
+end
+
+-- เอฟเฟกต์ฝนดาวตกฝั่ง Client
+local function spawnMeteorVisual(targetPos: Vector3)
+	local startPos = targetPos + Vector3.new(math.random(-25, 25), 140, math.random(-25, 25))
+	local meteor = Instance.new("Part")
+	meteor.Shape = Enum.PartType.Ball
+	meteor.Size = Vector3.new(6, 6, 6)
+	meteor.Material = Enum.Material.Neon
+	meteor.Color = Color3.fromRGB(255, 110, 25)
+	meteor.Anchored = true
+	meteor.CanCollide = false
+	meteor.CFrame = CFrame.new(startPos)
+	meteor.Parent = workspace
+
+	local tween = TweenService:Create(meteor, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		Position = targetPos,
+		Size = Vector3.new(10, 10, 10),
+	})
+	tween:Play()
+	Debris:AddItem(meteor, 0.6)
+end
+
+-- เอฟเฟกต์ลำแสงอาทิตย์และคัตซีนกล้อง
+local function playCutscene(mode: string, targetPos: Vector3)
+	if isPlayingCutscene then
+		return
+	end
+	isPlayingCutscene = true
+
+	local camera = workspace.CurrentCamera
+	local originalType = camera.CameraType
+	local originalCFrame = camera.CFrame
+	camera.CameraType = Enum.CameraType.Scriptable
+
+	if mode == "Supernova" then
+		local star = Instance.new("Part")
+		star.Shape = Enum.PartType.Ball
+		star.Size = Vector3.new(4, 4, 4)
+		star.Material = Enum.Material.Neon
+		star.Color = Color3.fromRGB(255, 240, 150)
+		star.Anchored = true
+		star.CanCollide = false
+		star.Position = targetPos + Vector3.new(0, 35, 0)
+		star.Parent = workspace
+
+		local camGoal = CFrame.lookAt(targetPos + Vector3.new(28, 22, 28), targetPos + Vector3.new(0, 10, 0))
+		TweenService:Create(camera, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { CFrame = camGoal }):Play()
+		TweenService:Create(star, TweenInfo.new(1.05, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {
+			Size = Vector3.new(55, 55, 55),
+			Position = targetPos,
+		}):Play()
+
+		task.wait(1.25)
+		Debris:AddItem(star, 0.5)
+
+	elseif mode == "SolarBeam" then
+		local beam = Instance.new("Part")
+		beam.Material = Enum.Material.Neon
+		beam.Color = Color3.fromRGB(255, 220, 70)
+		beam.Anchored = true
+		beam.CanCollide = false
+		beam.Size = Vector3.new(8, 260, 8)
+		beam.Position = targetPos + Vector3.new(0, 130, 0)
+		beam.Parent = workspace
+
+		local camGoal = CFrame.lookAt(targetPos + Vector3.new(35, 26, 35), targetPos)
+		TweenService:Create(camera, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { CFrame = camGoal }):Play()
+		TweenService:Create(beam, TweenInfo.new(0.75, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = Vector3.new(24, 260, 24),
+		}):Play()
+
+		task.wait(1.05)
+		Debris:AddItem(beam, 0.6)
+	end
+
+	camera.CameraType = originalType
+	camera.CFrame = originalCFrame
+	isPlayingCutscene = false
+end
+
+broadcastEvent.OnClientEvent:Connect(function(kind: string, arg1: any, arg2: any)
+	if kind == "Banner" then
+		showBanner(tostring(arg1), arg2)
+	elseif kind == "MeteorVisual" and typeof(arg1) == "Vector3" then
+		spawnMeteorVisual(arg1)
+	elseif kind == "Cutscene" and typeof(arg2) == "Vector3" then
+		playCutscene(tostring(arg1), arg2)
+	end
+end)
+
+-- สร้างเครื่องมือสำหรับผู้เล่น (Tool)
+local function giveTargetedTool(toolName: string, handleColor: Color3, actionName: string)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if not backpack then
+		return
+	end
+
+	local existing = backpack:FindFirstChild(toolName) or (player.Character and player.Character:FindFirstChild(toolName))
+	if existing then
+		existing:Destroy()
+	end
+
+	local tool = Instance.new("Tool")
+	tool.Name = toolName
+	tool.RequiresHandle = true
+
+	local handle = Instance.new("Part")
+	handle.Name = "Handle"
+	handle.Size = Vector3.new(1, 1, 4)
+	handle.Color = handleColor
+	handle.Material = Enum.Material.Neon
+	handle.Parent = tool
+
+	local cooldown = false
+	tool.Activated:Connect(function()
+		if cooldown then
+			return
+		end
+		cooldown = true
+		local hitPos = mouse.Hit.Position
+		adminAction:FireServer(actionName, hitPos)
+		task.wait(1.5)
+		cooldown = false
+	end)
+
+	tool.Parent = backpack
+end
+
+-- สร้าง UI แผงควบคุมหลัก
+local panel = Instance.new("Frame")
+panel.Name = "ControlPanel"
+panel.Size = UDim2.new(0, 260, 0, 340)
+panel.Position = UDim2.new(0, 20, 0.5, -170)
+panel.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
+panel.BorderSizePixel = 0
+panel.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = panel
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -20, 0, 38)
+title.Position = UDim2.new(0, 10, 0, 8)
+title.BackgroundTransparency = 1
+title.Text = "DEV EVENT PANEL"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = panel
+
+local list = Instance.new("Frame")
+list.Size = UDim2.new(1, -20, 1, -54)
+list.Position = UDim2.new(0, 10, 0, 48)
+list.BackgroundTransparency = 1
+list.Parent = panel
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 8)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = list
+
+local function makeButton(order: number, labelText: string, bgColor: Color3, onClick: (TextButton) -> ())
+	local btn = Instance.new("TextButton")
+	btn.LayoutOrder = order
+	btn.Size = UDim2.new(1, 0, 0, 38)
+	btn.BackgroundColor3 = bgColor
+	btn.Text = labelText
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamSemibold
+	btn.TextSize = 14
+	btn.BorderSizePixel = 0
+	btn.Parent = list
+
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 8)
+	btnCorner.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		onClick(btn)
+	end)
+	return btn
+end
+
+makeButton(1, "ฝนดาวตก (10 วิ / 500)", Color3.fromRGB(190, 75, 35), function()
+	adminAction:FireServer("MeteorShower")
+end)
+
+makeButton(2, "รับเครื่องมือ ซูเปอร์โนวา", Color3.fromRGB(145, 55, 195), function()
+	giveTargetedTool("Supernova Wand", Color3.fromRGB(255, 215, 70), "Supernova")
+end)
+
+makeButton(3, "รีเซ็ตเลือด (กดทันที)", Color3.fromRGB(45, 155, 95), function()
+	adminAction:FireServer("ManualHeal")
+end)
+
+makeButton(4, "Auto Heal: ปิด", Color3.fromRGB(65, 75, 95), function(btn)
+	autoHealState = not autoHealState
+	adminAction:FireServer("ToggleAutoHeal", autoHealState)
+	btn.Text = autoHealState and "Auto Heal: เปิด" or "Auto Heal: ปิด"
+	btn.BackgroundColor3 = autoHealState and Color3.fromRGB(35, 130, 185) or Color3.fromRGB(65, 75, 95)
+end)
+
+makeButton(5, "รับปืนลำแสงอาทิตย์", Color3.fromRGB(210, 155, 25), function()
+	giveTargetedTool("Solar Beam Gun", Color3.fromRGB(255, 230, 90), "SolarBeam")
+end)
+
+makeButton(6, "ประกาศ: Dev In Game", Color3.fromRGB(50, 105, 185), function()
+	adminAction:FireServer("DevAnnounce")
+end)
